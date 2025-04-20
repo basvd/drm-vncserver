@@ -65,6 +65,7 @@ static char fb_device[256] = "/dev/fb0";
 static char touch_device[256] = "";
 static char kbd_device[256] = "";
 static char mouse_device[256] = "";
+static char server_name[256] = "VNC";
 
 static struct fb_var_screeninfo var_scrinfo;
 static struct fb_fix_screeninfo fix_scrinfo;
@@ -443,7 +444,7 @@ static void init_fb_server(int argc, char **argv, rfbBool enable_touch, rfbBool 
     RFB_Server = rfbGetScreen(&argc, argv, FrameBuffer_Xwidth, FrameBuffer_Yheight, BITS_PER_SAMPLE, SAMPLES_PER_PIXEL, FrameBuffer_BytesPP);
     assert(RFB_Server != NULL);
 
-    RFB_Server->desktopName  = "VNC";
+    RFB_Server->desktopName  = server_name;
     RFB_Server->frameBuffer  = (char *)RFB_FrameBuffer;
     RFB_Server->alwaysShared = TRUE;
     RFB_Server->httpDir      = NULL;
@@ -578,17 +579,18 @@ static void update_screen32()
 void print_usage(char **argv)
 {
     fprintf(stdout,"%s [-f device] [-p port] [-t touchscreen] [-m touchscreen] [-k keyboard] [-r rotation] [-R touchscreen rotation] [-F FPS] [-v] [-h]\n"
-               "-p port: VNC port, default is 5900\n"
-               "-f device: drm device node, default is %s\n"
-               "-k device: keyboard device node (example: /dev/input/event0)\n"
-               "-t device: touchscreen device node (example:/dev/input/event2)\n"
-               "-m device: mouse device node (example:/dev/input/event2)\n"
-               "-r degrees: framebuffer rotation, default is 0.\n"
-               "-R degrees: touchscreen rotation, default is same as framebuffer rotation\n"
-               "-F FPS: Maximum target FPS. Default is 0, meaning unlimited FPS.\n"
-               "-v: verbose\n"
-               "-h: print this help\n\n",
-               *argv,drmFB_device);
+                "-n name: Name of the server, default is 'VNC'\n"
+                "-p port: VNC port, default is 5900\n"
+                "-f device: drm device node, default is %s\n"
+                "-k device: keyboard device node (example: /dev/input/event0)\n"
+                "-t device: touchscreen device node (example:/dev/input/event2)\n"
+                "-m device: mouse device node (example:/dev/input/event2)\n"
+                "-r degrees: framebuffer rotation, default is 0.\n"
+                "-R degrees: touchscreen rotation, default is same as framebuffer rotation\n"
+                "-F FPS: Maximum target FPS. Default is 0, meaning unlimited FPS.\n"
+                "-v: verbose\n"
+                "-h: print this help\n\n",
+                *argv,drmFB_device);
 }
 
 int main(int argc, char **argv)
@@ -624,6 +626,10 @@ int main(int argc, char **argv)
                 case 'k':
                     i++;
                     strcpy(kbd_device, argv[i]);
+                    break;
+                case 'n':
+                    i++;
+                    strcpy(server_name, argv[i]);
                     break;
                 case 'p':
                     i++;

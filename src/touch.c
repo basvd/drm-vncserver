@@ -36,7 +36,7 @@ static int trkg_id = -1;
 #define input_event_usec time.tv_usec
 #endif
 
-int init_touch(const char *touch_device, int vnc_rotate)
+int init_touch(const char *touch_device, int vnc_rotate, int c_xmin, int c_xmax, int c_ymin, int c_ymax)
 {
     log_info("Initializing touch device %s ...\n", touch_device);
     struct input_absinfo info;
@@ -45,22 +45,24 @@ int init_touch(const char *touch_device, int vnc_rotate)
         log_error("cannot open touch device %s\n", touch_device);
         return 0;
     }
-    // Get the Range of X and Y
+
+    rotate = vnc_rotate;
+
     if (ioctl(touchfd, EVIOCGABS(ABS_X), &info))
     {
         log_error("cannot get ABS_X info, %s\n", strerror(errno));
         return 0;
     }
-    xmin = info.minimum;
-    xmax = info.maximum;
+    xmin = c_xmin == 0 ? info.minimum : c_xmin;
+    xmax = c_xmax == 0 ? info.maximum : c_xmax;
+
     if (ioctl(touchfd, EVIOCGABS(ABS_Y), &info))
     {
         log_error("cannot get ABS_Y, %s\n", strerror(errno));
         return 0;
     }
-    ymin = info.minimum;
-    ymax = info.maximum;
-    rotate = vnc_rotate;
+    ymin = c_ymin == 0 ? info.minimum : c_ymin;
+    ymax = c_ymax == 0 ? info.maximum : c_ymax;
 
     log_info("  x:(%d %d)  y:(%d %d) \n", xmin, xmax, ymin, ymax);
     return 1;
@@ -100,8 +102,10 @@ void injectTouchEvent(enum MouseAction mouseAction, int x, int y, struct fb_var_
     /* Fake touch screen always reports zero */
     //???//if (xmin != 0 && xmax != 0 && ymin != 0 && ymax != 0)
     {
-        x = xmin + (x * (xmax - xmin)) / (scrinfo->xres);
-        y = ymin + (y * (ymax - ymin)) / (scrinfo->yres);
+        x = xmin + (int)(((double)x / scrinfo->xres) * (xmax - xmin));
+        y = ymin + (int)(((double)y / scrinfo->yres) * (ymax - ymin));
+        // x = xmin + (x * (xmax - xmin)) / (scrinfo->xres);
+        // y = ymin + (y * (ymax - ymin)) / (scrinfo->yres);
     }
 
     memset(&ev, 0, sizeof(ev));

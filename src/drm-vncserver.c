@@ -97,6 +97,11 @@ uint16_t minY = 0 ;
 uint16_t maxX = 0 ;
 uint16_t maxY = 0 ;
 
+int touch_xmin = 0;
+int touch_xmax = 0;
+int touch_ymin = 0;
+int touch_ymax = 0;
+
 #define UNUSED(x) (void)(x)
 
 struct type_name {
@@ -149,15 +154,15 @@ void rotateMatrix270(uint32_t * dest, uint32_t * src, uint16_t width, int16_t he
     uint32_t destOffset1 = ( width - 1 ) * height ;
     for(uint16_t y=0; y < height; y++)
     {
-        uint32_t destOffset =   y + destOffset1 ;
+        uint32_t destOffset = y + destOffset1 ;
         for(uint16_t x = 0; x < width; x++)
         {
             dest[destOffset] = src[srcOffset++];
             destOffset -= height;
         }
     }
-
 }
+
 void rotateMatrix90(uint32_t * dest, uint32_t * src, uint16_t width, int16_t height)
 {
     uint32_t srcOffset = 0;
@@ -473,7 +478,7 @@ static void init_fb_server(int argc, char **argv, rfbBool enable_touch, rfbBool 
         case 0:
             RFB_Server->width = FrameBuffer_Xwidth;
             RFB_Server->height = FrameBuffer_Yheight;
-            RFB_Server->paddedWidthInBytes = FrameBuffer_Xwidth * FrameBuffer_BytesPP;
+            RFB_Server->paddedWidthInBytes = RFB_Server->width * FrameBuffer_BytesPP;
             memcpy(RFB_FrameBuffer, DRM_FrameBuffer,FrameBufferSize);
             break;
 
@@ -484,8 +489,22 @@ static void init_fb_server(int argc, char **argv, rfbBool enable_touch, rfbBool 
             rotateMatrix90(RFB_FrameBuffer, DRM_FrameBuffer, FrameBuffer_Xwidth, FrameBuffer_Yheight);
             break;
 
+        case 180:
+            RFB_Server->width = FrameBuffer_Xwidth;
+            RFB_Server->height = FrameBuffer_Yheight;
+            RFB_Server->paddedWidthInBytes = RFB_Server->width * FrameBuffer_BytesPP;
+            rotateMatrix180(RFB_FrameBuffer, DRM_FrameBuffer, FrameBuffer_Xwidth, FrameBuffer_Yheight);
+            break;
+
+        case 270:
+            RFB_Server->width = FrameBuffer_Yheight;
+            RFB_Server->height = FrameBuffer_Xwidth;
+            RFB_Server->paddedWidthInBytes = RFB_Server->width * FrameBuffer_BytesPP;
+            rotateMatrix270(RFB_FrameBuffer, DRM_FrameBuffer, FrameBuffer_Xwidth, FrameBuffer_Yheight);
+            break;
+
         default:
-            log_fatal("%d is an invalid rotation value. 0, 90 are correct values\n",VNC_rotate);
+            log_fatal("%d is an invalid rotation value. 0, 90, 180, 270 are correct values\n",VNC_rotate);
             exit(EXIT_FAILURE);
     }
 
@@ -535,7 +554,7 @@ static void update_screen32()
     maxX = maxY = 0 ;
 
     uint16_t x2, y2;
-    uint32_t destOffset ;
+    uint32_t destOffset;
     uint8_t Changed = 0;
 
     if ( VNC_rotate == 90 ) {
@@ -547,24 +566,72 @@ static void update_screen32()
                     x2 = FrameBuffer_Yheight - 1 - y;
                     y2 = x;
                     r[destOffset + x2] = *f ;
-                    update_rec(x2,y2);
+
+                    update_rec(x2, y2);
                     Changed = 1;
                 }
                 destOffset += RFB_Server->width ;
-                f++;  c++;
+                f++;
+                c++;
             }
         }
     }
+    else if (VNC_rotate == 270) {
+        uint32_t destStart = (FrameBuffer_Xwidth - 1) * FrameBuffer_Yheight;
+        for (uint16_t y = 0; y < FrameBuffer_Yheight; y++) {
+            uint32_t destIndex = destStart + y;
+            for (uint16_t x = 0; x < FrameBuffer_Xwidth; x++) {
+                if (*f != *c) {
+                    *c = *f;
 
+                    x2 = y;
+                    y2 = FrameBuffer_Xwidth - 1 - x;
+
+                    r[destIndex] = *f;
+
+                    update_rec(x2, y2);
+                    Changed = 1;
+                }
+                f++;
+                c++;
+                // move up one row in rotated layout
+                destIndex -= FrameBuffer_Yheight;
+            }
+        }
+    }
+    else if (VNC_rotate == 180) {
+        uint32_t destIndex = FrameBuffer_Xwidth * FrameBuffer_Yheight - 1;
+        for (uint16_t y = 0; y < FrameBuffer_Yheight; y++) {
+            for (uint16_t x = 0; x < FrameBuffer_Xwidth; x++) {
+                if (*f != *c) {
+                    *c = *f;
+
+                    x2 = FrameBuffer_Xwidth - 1 - x;
+                    y2 = FrameBuffer_Yheight - 1 - y;
+
+                    r[destIndex] = *f;
+
+                    update_rec(x2, y2);
+                    Changed = 1;
+                }
+                f++;
+                c++;
+                destIndex--;
+            }
+        }
+    }
     else {
         for ( uint16_t y = 0 ; y < FrameBuffer_Yheight; y++) {
             for ( uint16_t x = 0 ; x < FrameBuffer_Xwidth; x++) {
                 if ( *f != *c) {
                     *r = *c = *f;
-                    update_rec(x,y);
+
+                    update_rec(x, y);
                     Changed = 1;
                 }
-                f++;  c++; r++;
+                f++;
+                c++;
+                r++;
             }
         }
     }
@@ -578,16 +645,17 @@ static void update_screen32()
 
 void print_usage(char **argv)
 {
-    fprintf(stdout,"%s [-f device] [-p port] [-t touchscreen] [-m touchscreen] [-k keyboard] [-r rotation] [-R touchscreen rotation] [-F FPS] [-v] [-h]\n"
-                "-n name: Name of the server, default is 'VNC'\n"
+    fprintf(stdout,"%s [-n name] [-f device] [-p port] [-t touchscreen] [-m touchscreen] [-k keyboard] [-r rotation] [-R touchscreen rotation] [-c touchscreen range] [-F fps] [-v] [-h]\n"
+                "-n name: name of the server, default is 'VNC'\n"
                 "-p port: VNC port, default is 5900\n"
-                "-f device: drm device node, default is %s\n"
+                "-f device: DRM device node, default is %s\n"
                 "-k device: keyboard device node (example: /dev/input/event0)\n"
-                "-t device: touchscreen device node (example:/dev/input/event2)\n"
-                "-m device: mouse device node (example:/dev/input/event2)\n"
-                "-r degrees: framebuffer rotation, default is 0.\n"
+                "-t device: touchscreen device node (example: /dev/input/event1)\n"
+                "-m device: mouse device node (example: /dev/input/event2)\n"
+                "-r degrees: framebuffer rotation, default is 0\n"
                 "-R degrees: touchscreen rotation, default is same as framebuffer rotation\n"
-                "-F FPS: Maximum target FPS. Default is 0, meaning unlimited FPS.\n"
+                "-c xmin,xmax,ymin,ymax: touchscreen range calibration\n"
+                "-F fps: target FPS, default is 0, meaning unlimited FPS\n"
                 "-v: verbose\n"
                 "-h: print this help\n\n",
                 *argv,drmFB_device);
@@ -604,6 +672,17 @@ int main(int argc, char **argv)
             {
                 switch (*(argv[i] + 1))
                 {
+                case 'c':
+                    i++;
+                    if (argv[i])
+                    {
+                        int result = sscanf(argv[i], "%d,%d,%d,%d", &touch_xmin, &touch_xmax, &touch_ymin, &touch_ymax);
+                        if (result != 4) {
+                            log_fatal("Invalid touchscreen range calibration values");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+                    break;
                 case 'h':
                     print_usage(argv);
                     exit(0);
@@ -694,7 +773,7 @@ int main(int argc, char **argv)
     }
     else if (strlen(touch_device) > 0) {
         // init touch only if there is a touch device defined
-        int ret = init_touch(touch_device, Touch_rotate);
+        int ret = init_touch(touch_device, Touch_rotate, touch_xmin, touch_xmax, touch_ymin, touch_ymax);
         enable_touch = (ret > 0);
     }
     else if(strlen(mouse_device) > 0) {

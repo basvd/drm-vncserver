@@ -132,9 +132,6 @@ static const struct type_name connector_type_names[] = {
     { DRM_MODE_CONNECTOR_DPI, "DPI" },
 };
 
-// Prototypes
-static void update_screen32();
-
 const char *connector_type_name(unsigned int type)
 {
     if (type < ARRAY_SIZE(connector_type_names) && type >= 0) {
@@ -550,7 +547,7 @@ static void update_screen32()
     uint32_t *r = RFB_FrameBuffer;  // -> remote framebuffer
 
     minX = RFB_Server->width - 1;
-    minY = RFB_Server->height -1 ;
+    minY = RFB_Server->height - 1 ;
     maxX = maxY = 0 ;
 
     uint16_t x2, y2;
@@ -563,6 +560,7 @@ static void update_screen32()
             for ( uint16_t x = 0 ; x < FrameBuffer_Xwidth; x++) {
                 if ( *f != *c) {
                     *c = *f;
+
                     x2 = FrameBuffer_Yheight - 1 - y;
                     y2 = x;
                     r[destOffset + x2] = *f ;
@@ -570,16 +568,16 @@ static void update_screen32()
                     update_rec(x2, y2);
                     Changed = 1;
                 }
-                destOffset += RFB_Server->width ;
                 f++;
                 c++;
+                destOffset += FrameBuffer_Yheight;
             }
         }
     }
     else if (VNC_rotate == 270) {
         uint32_t destStart = (FrameBuffer_Xwidth - 1) * FrameBuffer_Yheight;
         for (uint16_t y = 0; y < FrameBuffer_Yheight; y++) {
-            uint32_t destIndex = destStart + y;
+            destOffset = destStart + y;
             for (uint16_t x = 0; x < FrameBuffer_Xwidth; x++) {
                 if (*f != *c) {
                     *c = *f;
@@ -587,20 +585,19 @@ static void update_screen32()
                     x2 = y;
                     y2 = FrameBuffer_Xwidth - 1 - x;
 
-                    r[destIndex] = *f;
+                    r[destOffset] = *f;
 
                     update_rec(x2, y2);
                     Changed = 1;
                 }
                 f++;
                 c++;
-                // move up one row in rotated layout
-                destIndex -= FrameBuffer_Yheight;
+                destOffset -= FrameBuffer_Yheight;
             }
         }
     }
     else if (VNC_rotate == 180) {
-        uint32_t destIndex = FrameBuffer_Xwidth * FrameBuffer_Yheight - 1;
+        destOffset = FrameBuffer_Xwidth * FrameBuffer_Yheight - 1;
         for (uint16_t y = 0; y < FrameBuffer_Yheight; y++) {
             for (uint16_t x = 0; x < FrameBuffer_Xwidth; x++) {
                 if (*f != *c) {
@@ -609,14 +606,14 @@ static void update_screen32()
                     x2 = FrameBuffer_Xwidth - 1 - x;
                     y2 = FrameBuffer_Yheight - 1 - y;
 
-                    r[destIndex] = *f;
+                    r[destOffset] = *f;
 
                     update_rec(x2, y2);
                     Changed = 1;
                 }
                 f++;
                 c++;
-                destIndex--;
+                destOffset--;
             }
         }
     }

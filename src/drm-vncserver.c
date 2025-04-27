@@ -67,6 +67,9 @@ static char kbd_device[256] = "";
 static char mouse_device[256] = "";
 static char server_name[256] = "VNC";
 
+static char http_dir[256] = "";
+// static int http_port = 0;
+
 static struct fb_var_screeninfo var_scrinfo;
 static struct fb_fix_screeninfo fix_scrinfo;
 
@@ -505,6 +508,14 @@ static void init_fb_server(int argc, char **argv, rfbBool enable_touch, rfbBool 
             exit(EXIT_FAILURE);
     }
 
+    if (strlen(http_dir) > 0)
+    {
+        RFB_Server->httpDir = http_dir;
+        // RFB_Server->httpPort = (http_port > 0) ? http_port : 5800 + VNC_port - 5900;
+        RFB_Server->httpEnableProxyConnect = TRUE;
+        log_info("HTTP server enabled: dir=%s, port=%d\n", http_dir, RFB_Server->httpPort);
+    }
+
     rfbInitServer(RFB_Server);
 
     // Mark as dirty since we haven't sent any updates at all yet.
@@ -653,6 +664,7 @@ void print_usage(char **argv)
                 "-R degrees: touchscreen rotation, default is same as framebuffer rotation\n"
                 "-c xmin,xmax,ymin,ymax: touchscreen range calibration\n"
                 "-F fps: target FPS, default is 0, meaning unlimited FPS\n"
+                "-w dir: HTTP server directory, default is empty\n"
                 "-v: verbose\n"
                 "-h: print this help\n\n",
                 *argv,drmFB_device);
@@ -726,6 +738,11 @@ int main(int argc, char **argv)
                     i++;
                     if (argv[i])
                         Target_fps = atoi(argv[i]);
+                    break;
+                case 'w':
+                    i++;
+                    if (argv[i])
+                        strcpy(http_dir, argv[i]);
                     break;
                 case 'v':
                     verbose = 1;
